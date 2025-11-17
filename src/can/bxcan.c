@@ -39,7 +39,8 @@ const struct gs_device_bt_const CAN_btconst = {
 		GS_CAN_FEATURE_ONE_SHOT |
 		GS_CAN_FEATURE_HW_TIMESTAMP |
 		GS_CAN_FEATURE_IDENTIFY |
-		GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE
+		GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE |
+		GS_CAN_FEATURE_USER_ID
 #ifdef TERM_Pin
 		| GS_CAN_FEATURE_TERMINATION
 #endif
@@ -94,6 +95,57 @@ void can_set_bittiming(can_data_t *channel, const struct gs_device_bittiming *ti
 	channel->phase_seg1 = tseg1;
 	channel->phase_seg2 = timing->phase_seg2;
 	channel->sjw = timing->sjw;
+}
+
+bool can_set_filter(can_data_t *channel, const struct gs_device_filter *filter)
+{
+	if (channel == NULL || filter == NULL)
+		return false;
+
+	CAN_TypeDef* can = channel->instance;
+
+	if (can == NULL)
+		return false;
+
+	// check protocol version
+	if (filter->version != 0) {
+		return false;
+	}
+
+	// disable interrupt
+	bool was_irq_enabled = disable_irq();
+
+	// disable filter configuration
+	can->FMR |= CAN_FMR_FINIT;
+
+	// set filter scale (16-bit vs 32-bit)
+	can->FS1R = filter->fs1r;
+
+	// set filter mode (mask vs list)
+	can->FM1R = filter->fm1r;
+
+	// copy filter registers
+	for (uint32_t bank = 0; bank < CANFILTER_MAX_HW_FILTERS; bank++) {
+		can->sFilterRegister[bank].FR1 = filter->fr1[bank];
+		can->sFilterRegister[bank].FR2 = filter->fr2[bank];
+	}
+
+	// set fifo (fifo0 vs fifo1)
+	can->FFA1R = filter->ffa1r;
+
+	// enable or disable filter banks
+	can->FA1R = filter->fa1r;
+
+        // ensure all filter configuration writes are completed before proceeding
+        __DSB();
+
+	// enable filter configuration
+	can->FMR &= ~CAN_FMR_FINIT;
+
+	// restore interrupt
+	restore_irq(was_irq_enabled);
+
+	return true;
 }
 
 void can_enable(can_data_t *channel, uint32_t mode)

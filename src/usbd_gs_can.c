@@ -360,6 +360,10 @@ static uint8_t USBD_GS_CAN_Config_Request(USBD_HandleTypeDef *pdev, USBD_SetupRe
 		case GS_USB_BREQ_DATA_BITTIMING:
 			len = sizeof(struct gs_device_bittiming);
 			break;
+		case GS_USB_BREQ_SET_USER_ID:
+			// Using unimplemented command SET_USER_ID for setting hardware filter
+			len = sizeof(struct gs_device_filter);
+			break;
 		case GS_USB_BREQ_BT_CONST_EXT:
 			src = &CAN_btconst_ext;
 			len = sizeof(CAN_btconst_ext);
@@ -384,6 +388,7 @@ static uint8_t USBD_GS_CAN_Config_Request(USBD_HandleTypeDef *pdev, USBD_SetupRe
 			len = sizeof(term_state);
 			break;
 		}
+
 		default:
 			goto out_fail;
 	}
@@ -399,6 +404,7 @@ static uint8_t USBD_GS_CAN_Config_Request(USBD_HandleTypeDef *pdev, USBD_SetupRe
 		case GS_USB_BREQ_IDENTIFY:
 		case GS_USB_BREQ_DATA_BITTIMING:
 		case GS_USB_BREQ_SET_TERMINATION:
+		case GS_USB_BREQ_SET_USER_ID: // Hardware filter
 			if (req->wLength > sizeof(hcan->ep0_buf)) {
 				goto out_fail;
 			}
@@ -562,6 +568,13 @@ static uint8_t USBD_GS_CAN_EP0_RxReady(USBD_HandleTypeDef *pdev) {
 					USBD_CtlError(pdev, req);
 				}
 			}
+			break;
+		}
+		case GS_USB_BREQ_SET_USER_ID: { // Hardware filter
+			const struct gs_device_filter *filter = (struct gs_device_filter *)hcan->ep0_buf;
+
+			if (!can_set_filter(channel, filter))
+				goto out_fail;
 			break;
 		}
 		default:

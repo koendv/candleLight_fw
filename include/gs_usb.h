@@ -313,3 +313,21 @@ struct gs_host_frame {
 		DECLARE_FLEX_ARRAY(struct canfd_ts,		  canfd_ts);
 	};
 } __packed __aligned(4);
+
+// gs_usb filter protocol
+
+#define CANFILTER_MAX_HW_FILTERS 14
+
+// hardware filter structure
+
+struct gs_device_filter {
+	uint8_t version; /* protocol version, currently 0 */
+	uint8_t reserved[3];
+	uint32_t fs1r;
+	uint32_t fm1r;
+	uint32_t ffa1r;
+	uint32_t fa1r;
+	uint32_t fr1[CANFILTER_MAX_HW_FILTERS];
+	uint32_t fr2[CANFILTER_MAX_HW_FILTERS];
+} __attribute__((packed)) __attribute__((aligned(4)));
+
