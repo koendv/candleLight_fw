@@ -24,6 +24,7 @@
 
  */
 
+#include <string.h>
 #include "can.h"
 #include "config.h"
 #include "device.h"
@@ -39,7 +40,8 @@ const struct gs_device_bt_const CAN_btconst = {
 		GS_CAN_FEATURE_ONE_SHOT |
 		GS_CAN_FEATURE_HW_TIMESTAMP |
 		GS_CAN_FEATURE_IDENTIFY |
-		GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE
+		GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE |
+		GS_CAN_FEATURE_USER_ID
 #ifdef TERM_Pin
 		| GS_CAN_FEATURE_TERMINATION
 #endif
@@ -55,6 +57,22 @@ const struct gs_device_bt_const CAN_btconst = {
 		.brp_max = 1024,
 		.brp_inc = 1,
 	},
+};
+
+
+const struct gs_filter_info CAN_filter_info = {
+	.dev = CANFILTER_DEV_BXCAN_F0,     /* bxcan, 14 registers */
+	.reserved = {0},
+};
+
+struct gs_device_filter filter = {
+	.dev = CANFILTER_DEV_BXCAN_F0, // BXCAN, 14 filter banks
+	.fs1r = 0x00000001,            // 32-bit for filter bank 0
+	.fm1r = 0x00000000,            // Mask mode for filter 0
+	.ffa1r = 0x00000000,           // Assign to FIFO 0
+	.fr1 = {0},                    // All IDs = 0
+	.fr2 = {0},                    // All masks = 0 (don't care)
+	.fa1r = 0x00000001             // Enable filter bank 0
 };
 
 // The STM32F0 only has one CAN interface, define it as CAN1 as
@@ -96,6 +114,74 @@ void can_set_bittiming(can_data_t *channel, const struct gs_device_bittiming *ti
 	channel->sjw = timing->sjw;
 }
 
+bool can_apply_filter(can_data_t *channel)
+{
+	if (channel == NULL)
+		return false;
+
+	CAN_TypeDef* can = channel->instance;
+
+	if (can == NULL)
+		return false;
+
+	// disable filter configuration
+	can->FMR |= CAN_FMR_FINIT;
+
+	// use all filter banks for CAN1
+	can->FMR &= ~CAN_FMR_CAN2SB;
+
+	// disable filters
+	can->FA1R = 0x0;
+
+	// set filter scale (16-bit vs 32-bit)
+	can->FS1R = filter.fs1r;
+
+	// set filter mode (mask vs list)
+	can->FM1R = filter.fm1r;
+
+	// set fifo (fifo0 vs fifo1)
+	can->FFA1R = filter.ffa1r;
+
+	// copy each FR1 and FR2
+	const uint32_t max_hw_filters = sizeof(filter.fr1)/sizeof(filter.fr1[0]);
+	for (uint32_t bank = 0; bank < max_hw_filters; bank++) {
+		can->sFilterRegister[bank].FR1 = filter.fr1[bank];
+		can->sFilterRegister[bank].FR2 = filter.fr2[bank];
+	}
+
+	// enable filter banks
+	can->FA1R = filter.fa1r;
+
+	// Flush data
+	__DSB();
+
+	// exit filter configuration mode
+	can->FMR &= ~CAN_FMR_FINIT;
+
+	return true;
+}
+
+bool can_set_filter(can_data_t *channel, const struct gs_device_filter *new_filter)
+{
+	if (channel == NULL || new_filter == NULL)
+		return false;
+
+	// check filter is for bxcan, not fdcan
+	if (new_filter->dev != CANFILTER_DEV_BXCAN_F0)
+		return false;
+
+	memcpy(&filter, new_filter, sizeof(struct gs_device_filter));
+
+	bool was_enabled = can_is_enabled(channel);
+	bool was_irq_enabled = disable_irq();
+	can_init(channel, CAN_INTERFACE);
+	can_disable(channel);
+	if (was_enabled) can_enable(channel, GS_CAN_MODE_NORMAL);
+	restore_irq(was_irq_enabled);
+
+	return true;
+}
+
 void can_enable(can_data_t *channel, uint32_t mode)
 {
 	CAN_TypeDef *can = channel->instance;
@@ -123,8 +209,8 @@ void can_enable(can_data_t *channel, uint32_t mode)
 
 	// Reset CAN peripheral
 	can->MCR |= CAN_MCR_RESET;
-	while ((can->MCR & CAN_MCR_RESET) != 0);                                                 // reset bit is set to zero after reset
-	while ((can->MSR & CAN_MSR_SLAK) == 0);                                                // should be in sleep mode after reset
+	while ((can->MCR & CAN_MCR_RESET) != 0); // reset bit is set to zero after reset
+	while ((can->MSR & CAN_MSR_SLAK) == 0);  // should be in sleep mode after reset
 
 	// Completely reset while being of the bus
 	rcc_reset(can);
@@ -135,9 +221,7 @@ void can_enable(can_data_t *channel, uint32_t mode)
 	can->MCR = mcr;
 	can->BTR = btr;
 
-	can->MCR &= ~CAN_MCR_INRQ;
-	while ((can->MSR & CAN_MSR_INAK) != 0);
-
+#if 0
 	uint32_t filter_bit = 0x00000001;
 	can->FMR |= CAN_FMR_FINIT;
 	can->FMR &= ~CAN_FMR_CAN2SB;
@@ -149,6 +233,12 @@ void can_enable(can_data_t *channel, uint32_t mode)
 	can->FFA1R &= ~filter_bit;       // assign filter 0 to FIFO 0
 	can->FA1R |= filter_bit;         // enable filter
 	can->FMR &= ~CAN_FMR_FINIT;
+#else
+	can_apply_filter(channel);
+#endif
+
+	can->MCR &= ~CAN_MCR_INRQ;
+	while ((can->MSR & CAN_MSR_INAK) != 0);
 
 #ifdef nCANSTBY_Pin
 	HAL_GPIO_WritePin(nCANSTBY_Port, nCANSTBY_Pin, !GPIO_INIT_STATE(nCANSTBY_Active_High));
