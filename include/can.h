@@ -52,6 +52,7 @@ extern const struct gs_device_bt_const_extended CAN_btconst_ext;
 
 void can_init(can_data_t *channel, CAN_TypeDef *instance);
 void can_set_bittiming(can_data_t *channel, const struct gs_device_bittiming *timing);
+bool can_set_filter(can_data_t *channel, const struct gs_device_filter *filter);
 
 #ifdef CONFIG_CANFD
 void can_set_data_bittiming(can_data_t *channel, const struct gs_device_bittiming *timing);

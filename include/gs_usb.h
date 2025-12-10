@@ -174,8 +174,8 @@ enum gs_usb_breq {
 	GS_USB_BREQ_DEVICE_CONFIG,
 	GS_USB_BREQ_TIMESTAMP,
 	GS_USB_BREQ_IDENTIFY,
-	GS_USB_BREQ_GET_USER_ID,    //not implemented
-	GS_USB_BREQ_SET_USER_ID,    //not implemented
+	GS_USB_BREQ_GET_USER_ID,    // repurposed. now gets CANBUS filter info.
+	GS_USB_BREQ_SET_USER_ID,    // repurposed. now sets CANBUS filter.
 	GS_USB_BREQ_DATA_BITTIMING,
 	GS_USB_BREQ_BT_CONST_EXT,
 	GS_USB_BREQ_SET_TERMINATION,
@@ -313,3 +313,28 @@ struct gs_host_frame {
 		DECLARE_FLEX_ARRAY(struct canfd_ts,		  canfd_ts);
 	};
 } __packed __aligned(4);
+
+// gs_usb filter protocol: answer to repurposed GET_USER_ID
+
+#define CANFILTER_DEV_BXCAN_F0 1 /* bxcan, 14 filters */
+
+struct gs_filter_info {
+	uint8_t dev;     /* device, CANFILTER_DEV_BXCAN_F0 for bxcan with 14 registers */
+	uint8_t reserved[3];
+}  __packed __aligned(4);
+
+extern const struct gs_filter_info CAN_filter_info;
+
+// hardware filter structure: contents of repurposed SET_USER_ID
+
+struct gs_device_filter {
+	uint8_t dev; /* device, CANFILTER_DEV_BXCAN for bxcan with 14 registers */
+	uint8_t reserved[3];
+	uint32_t fs1r;
+	uint32_t fm1r;
+	uint32_t ffa1r;
+	uint32_t fa1r;
+	uint32_t fr1[14];
+	uint32_t fr2[14];
+} __packed __aligned(4);
+
