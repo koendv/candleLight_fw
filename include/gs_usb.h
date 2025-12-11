@@ -50,8 +50,9 @@ THE SOFTWARE.
 /* #define GS_CAN_FEATURE_REQ_USB_QUIRK_LPC546XX (1<<9) */
 /* #define GS_CAN_FEATURE_BT_CONST_EXT          (1<<10) */
 /* #define GS_CAN_FEATURE_TERMINATION           (1<<11) */
-#define GS_CAN_MODE_BERR_REPORTING (1<<12)
+#define GS_CAN_MODE_BERR_REPORTING				(1<<12)
 /* GS_CAN_FEATURE_GET_STATE (1<<13) */
+#define GS_CAN_FEATURE_FILTER					(1<<14)
 
 #define GS_CAN_FEATURE_LISTEN_ONLY				(1<<0)
 #define GS_CAN_FEATURE_LOOP_BACK				(1<<1)
@@ -174,13 +175,15 @@ enum gs_usb_breq {
 	GS_USB_BREQ_DEVICE_CONFIG,
 	GS_USB_BREQ_TIMESTAMP,
 	GS_USB_BREQ_IDENTIFY,
-	GS_USB_BREQ_GET_USER_ID,    // repurposed. now gets CANBUS filter info.
-	GS_USB_BREQ_SET_USER_ID,    // repurposed. now sets CANBUS filter.
+	GS_USB_BREQ_GET_USER_ID,    //not implemented
+	GS_USB_BREQ_SET_USER_ID,    //not implemented
 	GS_USB_BREQ_DATA_BITTIMING,
 	GS_USB_BREQ_BT_CONST_EXT,
 	GS_USB_BREQ_SET_TERMINATION,
 	GS_USB_BREQ_GET_TERMINATION,
 	GS_USB_BREQ_GET_STATE,
+	GS_USB_BREQ_GET_FILTER,
+	GS_USB_BREQ_SET_FILTER,
 };
 
 enum gs_can_mode {
@@ -314,7 +317,7 @@ struct gs_host_frame {
 	};
 } __packed __aligned(4);
 
-// gs_usb filter protocol: answer to repurposed GET_USER_ID
+// gs_usb filter protocol: answer to GET_FILTER
 
 #define CANFILTER_DEV_BXCAN_F0 1 /* bxcan, 14 filters */
 
@@ -325,7 +328,7 @@ struct gs_filter_info {
 
 extern const struct gs_filter_info CAN_filter_info;
 
-// hardware filter structure: contents of repurposed SET_USER_ID
+// hardware filter structure: contents of SET_FILTER
 
 struct gs_device_filter {
 	uint8_t dev; /* device, CANFILTER_DEV_BXCAN for bxcan with 14 registers */
